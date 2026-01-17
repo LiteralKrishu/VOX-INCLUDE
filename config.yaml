@@ -1,0 +1,42 @@
+# VOX-INCLUDE Configuration
+
+app:
+  name: "VOX-INCLUDE"
+  version: "0.1.0"
+  domain: "public_services"
+  debug: true
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  chunk_size: 1024
+  buffer_duration_seconds: 5.0
+
+features:
+  mfcc_coefficients: 40
+  n_fft: 2048
+  hop_length: 512
+  frame_length_ms: 25
+  frame_shift_ms: 10
+
+emotion:
+  model_type: "pretrained"
+  model_name: "ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition"
+  emotions:
+    - neutral
+    - happy
+    - sad
+    - angry
+    - fearful
+  confidence_threshold: 0.6
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  cors_origins:
+    - "*"
+
+privacy:
+  on_device_processing: true
+  retain_raw_audio: false
+  anonymize_features: true
