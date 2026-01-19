@@ -75,8 +75,9 @@ class BayesianUpdater:
             temp_posteriors[state] = posterior
             total_unnormalized += posterior
             
-        # Normalize
-        if total_unnormalized > 0:
+        # Normalize with epsilon for numerical stability
+        epsilon = 1e-10
+        if total_unnormalized > epsilon:
             for state in self.states:
                 posteriors[state] = temp_posteriors[state] / total_unnormalized
         else:

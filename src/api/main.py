@@ -2,6 +2,7 @@
 
 import io
 import base64
+import time
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
@@ -39,7 +40,18 @@ async def lifespan(app: FastAPI):
     
     # Core modules
     feature_extractor = FeatureExtractor()
-    emotion_recognizer = EmotionRecognizer()
+    
+    # Use fast mode (SimplisticEmotionRecognizer) for real-time responsiveness
+    # Set FAST_MODE=false in environment to use full HuggingFace model
+    import os
+    fast_mode = os.environ.get("VOX_FAST_MODE", "true").lower() == "true"
+    
+    if fast_mode:
+        print("Using FAST MODE (SimplisticEmotionRecognizer) for real-time performance")
+        from ..emotion_recognition import SimplisticEmotionRecognizer
+        emotion_recognizer = SimplisticEmotionRecognizer()
+    else:
+        emotion_recognizer = EmotionRecognizer()
     
     # Milestone 2 modules
     intent_classifier = IntentClassifier(use_transformer=False)  # Start with rule-based
@@ -50,13 +62,14 @@ async def lifespan(app: FastAPI):
     
     print("Initialization complete.")
     
-    # Pre-load emotion model
-    try:
-        emotion_recognizer.load_model()
-        print("Emotion model loaded successfully")
-    except Exception as e:
-        print(f"Warning: Could not pre-load emotion model: {e}")
-        print("Model will be loaded on first request")
+    # Pre-load emotion model (only for non-fast mode)
+    if not fast_mode:
+        try:
+            emotion_recognizer.load_model()
+            print("Emotion model loaded successfully")
+        except Exception as e:
+            print(f"Warning: Could not pre-load emotion model: {e}")
+            print("Model will be loaded on first request")
     
     yield
     
@@ -183,6 +196,7 @@ class ComprehensiveAnalysisResponse(BaseModel):
     cognitive_state: CognitiveStateResponse
     intervention: InterventionResponse
     conversation_metrics: Dict[str, Any]
+    features: Optional[FeatureResponse] = None
 
 
 # ============= Helper Functions =============
@@ -475,13 +489,28 @@ async def comprehensive_analysis(request: ComprehensiveAnalysisRequest):
     emotion_response = None
     intent_response = None
     emotion_data = {}
+    audio = None  # Initialize audio to None for later use
+    
+    # Timing for diagnostics
+    start_time = time.time()
     
     # Process audio if provided
     if request.audio_base64 and emotion_recognizer:
         try:
+            decode_start = time.time()
             audio = decode_audio(request.audio_base64, request.sample_rate)
-            if len(audio) >= 1000:
+            print(f"[TIMING] Audio decode: {(time.time() - decode_start)*1000:.1f}ms, samples: {len(audio)}")
+            
+            # Skip processing if audio is too short (empty/silent chunk)
+            if len(audio) < 2048:
+                print(f"Skipping analysis: Audio too short ({len(audio)} samples)")
+                audio = None
+                
+            if audio is not None and len(audio) >= 1000:
+                predict_start = time.time()
                 emotion_result = emotion_recognizer.predict(audio)
+                print(f"[TIMING] Emotion prediction: {(time.time() - predict_start)*1000:.1f}ms")
+                
                 emotion_response = EmotionResponse(
                     emotion=emotion_result.emotion,
                     confidence=emotion_result.confidence,
@@ -543,6 +572,24 @@ async def comprehensive_analysis(request: ComprehensiveAnalysisRequest):
         context=metrics
     )
     
+    # Extract features (SNR) if audio present and successfully decoded
+    features_response = None
+    if audio is not None and feature_extractor:
+        try:
+            features = feature_extractor.extract(audio)
+            aggregated = features.get_aggregated()
+            features_response = FeatureResponse(
+                mfcc_mean=aggregated.get("mfcc_mean", []),
+                mfcc_std=aggregated.get("mfcc_std", []),
+                energy_mean=aggregated.get("energy_mean"),
+                energy_std=aggregated.get("energy_std"),
+                pitch_mean=aggregated.get("pitch_mean"),
+                pitch_std=aggregated.get("pitch_std"),
+                snr=aggregated.get("snr")
+            )
+        except Exception as e:
+            print(f"Feature extraction error: {e}")
+
     return ComprehensiveAnalysisResponse(
         emotion=emotion_response,
         intent=intent_response,
@@ -574,7 +621,8 @@ async def comprehensive_analysis(request: ComprehensiveAnalysisRequest):
                 parameters=intervention.action_data
              ).visual_aids if request.text and output_generator else None
         ),
-        conversation_metrics=metrics
+        conversation_metrics=metrics,
+        features=features_response
     )
 
 
