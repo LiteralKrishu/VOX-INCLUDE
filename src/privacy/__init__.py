@@ -1,10 +1,18 @@
-"""Privacy module for VOX-INCLUDE.
+"""VOX-INCLUDE Privacy Module"""
 
-This module will be implemented in Phase 7.
-"""
+from .anonymization import AudioAnonymizer, DataMinimizer
+from .consent_manager import (
+    ConsentManager,
+    TransparencyDashboard,
+    PermissionLevel,
+    DataCategory,
+)
 
-# Placeholder for privacy
-# Will include:
-# - Data anonymization
-# - Consent management
-# - Transparency dashboard
+__all__ = [
+    "AudioAnonymizer",
+    "DataMinimizer",
+    "ConsentManager",
+    "TransparencyDashboard",
+    "PermissionLevel",
+    "DataCategory",
+]

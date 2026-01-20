@@ -18,6 +18,10 @@ from src.intent_recognition.intent_classifier import IntentClassifier
 from src.intent_recognition.memory_graph import MemoryGraph
 from src.intent_recognition.cognitive_estimator import CognitiveStateEstimator
 from src.adaptive_system import InterventionEngine, OutputGenerator
+from src.privacy import (
+    ConsentManager, TransparencyDashboard, PermissionLevel, DataCategory,
+    AudioAnonymizer, DataMinimizer
+)
 
 
 # Global instances
@@ -197,6 +201,39 @@ class ComprehensiveAnalysisResponse(BaseModel):
     intervention: InterventionResponse
     conversation_metrics: Dict[str, Any]
     features: Optional[FeatureResponse] = None
+
+
+class ConsentUpdateRequest(BaseModel):
+    """Request to update consent settings."""
+    user_id: str = Field(..., description="User identifier")
+    session_id: str = Field(..., description="Session identifier")
+    permission_level: str = Field(..., description="Permission level: NONE, VOICE_ONLY, VOICE_BEHAVIORAL, FULL_MULTIMODAL")
+    opaque_mode: bool = Field(default=False, description="Enable right to opaqueness")
+
+
+class ConsentStatusResponse(BaseModel):
+    """Consent status response."""
+    user_id: str
+    permission_level: str
+    opaque_mode: bool
+    allowed_categories: List[str]
+
+
+class ExplainabilityResponse(BaseModel):
+    """Explainable AI decision breakdown."""
+    summary: str
+    factors: List[Dict[str, Any]]
+    confidence_breakdown: Dict[str, float]
+    data_used: List[str]
+
+
+class DataExportResponse(BaseModel):
+    """User data export response."""
+    user_id: str
+    current_permission_level: str
+    opaque_mode: bool
+    consent_history: List[Dict[str, Any]]
+    audit_log: List[Dict[str, Any]]
 
 
 # ============= Helper Functions =============
@@ -648,6 +685,112 @@ async def clear_conversation():
         cognitive_estimator.clear_history()
     
     return {"status": "cleared", "message": "Conversation history cleared"}
+
+
+# ============= Privacy & Consent Endpoints =============
+
+# In-memory consent store (would be database in production)
+_consent_managers: Dict[str, ConsentManager] = {}
+_audio_anonymizer = AudioAnonymizer(epsilon=1.0)
+
+
+def _get_consent_manager(user_id: str, session_id: str) -> ConsentManager:
+    """Get or create consent manager for user."""
+    key = f"{user_id}:{session_id}"
+    if key not in _consent_managers:
+        _consent_managers[key] = ConsentManager(user_id, session_id)
+    return _consent_managers[key]
+
+
+@app.post("/api/v1/privacy/consent", response_model=ConsentStatusResponse)
+async def update_consent(request: ConsentUpdateRequest):
+    """Update user consent settings."""
+    try:
+        level = PermissionLevel[request.permission_level.upper()]
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Invalid permission level: {request.permission_level}")
+    
+    manager = _get_consent_manager(request.user_id, request.session_id)
+    manager.set_permission_level(level)
+    
+    if request.opaque_mode:
+        manager.enable_opaque_mode()
+    else:
+        manager.disable_opaque_mode()
+    
+    allowed = manager._get_allowed_categories(manager.current_level)
+    
+    return ConsentStatusResponse(
+        user_id=request.user_id,
+        permission_level=manager.current_level.name,
+        opaque_mode=manager.is_opaque(),
+        allowed_categories=[c.value for c in allowed]
+    )
+
+
+@app.get("/api/v1/privacy/consent/{user_id}/{session_id}", response_model=ConsentStatusResponse)
+async def get_consent_status(user_id: str, session_id: str):
+    """Get current consent status for a user."""
+    manager = _get_consent_manager(user_id, session_id)
+    allowed = manager._get_allowed_categories(manager.current_level)
+    
+    return ConsentStatusResponse(
+        user_id=user_id,
+        permission_level=manager.current_level.name,
+        opaque_mode=manager.is_opaque(),
+        allowed_categories=[c.value for c in allowed]
+    )
+
+
+@app.get("/api/v1/privacy/export/{user_id}/{session_id}", response_model=DataExportResponse)
+async def export_user_data(user_id: str, session_id: str):
+    """Export all user data (GDPR compliance)."""
+    manager = _get_consent_manager(user_id, session_id)
+    data = manager.export_user_data()
+    
+    return DataExportResponse(**data)
+
+
+@app.delete("/api/v1/privacy/delete/{user_id}/{session_id}")
+async def delete_user_data(user_id: str, session_id: str):
+    """Delete all user data (Right to be Forgotten)."""
+    manager = _get_consent_manager(user_id, session_id)
+    result = manager.request_deletion()
+    
+    # Remove from in-memory store
+    key = f"{user_id}:{session_id}"
+    if key in _consent_managers:
+        del _consent_managers[key]
+    
+    return {"status": "deleted", "details": result}
+
+
+@app.post("/api/v1/privacy/explain", response_model=ExplainabilityResponse)
+async def explain_decision(
+    emotion_result: Optional[Dict[str, Any]] = None,
+    cognitive_result: Optional[Dict[str, Any]] = None,
+    intervention_result: Optional[Dict[str, Any]] = None
+):
+    """
+    Get explainable AI breakdown of a decision.
+    
+    This endpoint provides transparency about how the AI made its decisions.
+    """
+    explanation = TransparencyDashboard.explain_decision(
+        emotion_result or {},
+        cognitive_result or {},
+        intervention_result
+    )
+    
+    return ExplainabilityResponse(**explanation)
+
+
+@app.get("/api/v1/privacy/transparency/{user_id}/{session_id}")
+async def get_transparency_summary(user_id: str, session_id: str):
+    """Get transparency summary showing what data is being processed."""
+    manager = _get_consent_manager(user_id, session_id)
+    summary = TransparencyDashboard.get_processing_summary(manager)
+    return summary
 
 
 # ============= Run Server =============
