@@ -14,12 +14,12 @@ class TranscriptionService {
 
     try {
       _isAvailable = await _speech.initialize(
-        onError: (e) => print("STT Error: $e"),
-        onStatus: (s) => print("STT Status: $s"),
+        onError: (e) => debugPrint("STT Error: $e"),
+        onStatus: (s) => debugPrint("STT Status: $s"),
       );
       return _isAvailable;
     } catch (e) {
-      print("STT Init Error: $e");
+      debugPrint("STT Init Error: $e");
       return false;
     }
   }
@@ -37,8 +37,10 @@ class TranscriptionService {
         }
       },
       localeId: 'en_US',
-      cancelOnError: true,
-      listenMode: ListenMode.confirmation,
+      listenOptions: SpeechListenOptions(
+        cancelOnError: true,
+        listenMode: ListenMode.confirmation,
+      ),
     );
   }
 

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wear/wear.dart';
 import 'package:animate_do/animate_do.dart';
 import 'analysis_controller.dart';
-import '../../intervention/presentation/meaning_ribbon.dart';
 import '../../../core/theme/app_theme.dart';
 
 class WatchDashboardScreen extends ConsumerWidget {
@@ -59,7 +58,7 @@ class WatchDashboardScreen extends ConsumerWidget {
               Text(
                 "VOX",
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 10,
                   letterSpacing: 2,
                 ),
@@ -79,9 +78,9 @@ class WatchDashboardScreen extends ConsumerWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: statusColor.withOpacity(0.2),
+                      color: statusColor.withValues(alpha: 0.2),
                       border: Border.all(
-                        color: statusColor.withOpacity(0.8),
+                        color: statusColor.withValues(alpha: 0.8),
                         width: isRecording ? 2 + (realAmplitude * 5) : 2,
                       ),
                     ),
@@ -128,11 +127,11 @@ class WatchDashboardScreen extends ConsumerWidget {
                 ),
 
               // Intent (if available and short)
-              if (data?.cognitiveState.intent != null)
+              if (data?.intent != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
-                    data!.cognitiveState.intent!,
+                    data!.intent!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.white54, fontSize: 10),

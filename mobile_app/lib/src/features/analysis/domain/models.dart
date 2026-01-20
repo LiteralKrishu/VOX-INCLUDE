@@ -82,12 +82,14 @@ class AnalysisResult {
   final Emotion emotion;
   final CognitiveState cognitiveState;
   final Intervention intervention;
+  final String? intent;
   final double snr;
 
   AnalysisResult({
     required this.emotion,
     required this.cognitiveState,
     required this.intervention,
+    this.intent,
     this.snr = 0.0,
   });
 
@@ -96,6 +98,7 @@ class AnalysisResult {
       emotion: Emotion.fromJson(json['emotion'] ?? {}),
       cognitiveState: CognitiveState.fromJson(json['cognitive_state'] ?? {}),
       intervention: Intervention.fromJson(json['intervention'] ?? {}),
+      intent: json['intent']?['intent'],
       snr: (json['features']?['snr'] ?? 0.0).toDouble(),
     );
   }

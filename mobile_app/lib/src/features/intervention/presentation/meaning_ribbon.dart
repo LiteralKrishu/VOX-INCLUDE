@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 
 /// MeaningRibbon - Visualizes emotional state and real-time audio amplitude
@@ -10,6 +9,7 @@ class MeaningRibbon extends StatelessWidget {
   final double amplitude; // 0.0 to 1.0 (from real audio)
   final double jitter; // 0.0 to 1.0 (cognitive load)
   final String? label;
+  final String? transcript;
   final bool isRecording;
 
   const MeaningRibbon({
@@ -18,6 +18,7 @@ class MeaningRibbon extends StatelessWidget {
     this.amplitude = 0.0,
     this.jitter = 0.0,
     this.label,
+    this.transcript,
     this.isRecording = false,
   });
 
@@ -27,13 +28,36 @@ class MeaningRibbon extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         // Real-time audio visualization (no looping animation)
-        CustomPaint(
-          size: const Size(double.infinity, 200),
-          painter: AudioWavePainter(
-            color: color.withValues(alpha: 0.7),
-            amplitude: amplitude,
-            jitter: jitter,
-            isActive: isRecording,
+        // Real-time Transcript / Text Visualization
+        Container(
+          height: 200,
+          width: double.infinity,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Text(
+              (transcript != null && transcript!.isNotEmpty)
+                  ? transcript!
+                  : (isRecording ? "Listening..." : ""),
+              key: ValueKey(transcript ?? "empty"),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: color.withValues(
+                  alpha: 0.9 + (amplitude * 0.1),
+                ), // Pulse with voice
+                fontSize: 24 + (amplitude * 4), // Subtle size pulse
+                fontWeight: FontWeight.w300,
+                height: 1.4,
+                letterSpacing: 0.5,
+                shadows: [
+                  Shadow(
+                    color: color.withValues(alpha: 0.5),
+                    blurRadius: 10 * amplitude,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
 
@@ -77,95 +101,5 @@ class MeaningRibbon extends StatelessWidget {
           ),
       ],
     );
-  }
-}
-
-/// Painter that visualizes REAL audio amplitude (not a fake animation)
-class AudioWavePainter extends CustomPainter {
-  final Color color;
-  final double amplitude; // Real normalized amplitude 0.0-1.0
-  final double jitter;
-  final bool isActive;
-
-  AudioWavePainter({
-    required this.color,
-    required this.amplitude,
-    required this.jitter,
-    required this.isActive,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round;
-
-    final fillPaint = Paint()
-      ..color = color.withValues(alpha: 0.2)
-      ..style = PaintingStyle.fill;
-
-    final width = size.width;
-    final height = size.height;
-    final midHeight = height / 2;
-
-    if (!isActive || amplitude < 0.01) {
-      // Draw flat line when not recording or silent
-      canvas.drawLine(
-        Offset(0, midHeight),
-        Offset(width, midHeight),
-        paint..color = color.withValues(alpha: 0.3),
-      );
-      return;
-    }
-
-    // Real audio visualization - bars representing amplitude
-    final barCount = 50;
-    final barWidth = width / (barCount * 1.5);
-    final gap = barWidth * 0.5;
-
-    final random = Random(42); // Fixed seed for consistent but varied heights
-
-    for (int i = 0; i < barCount; i++) {
-      final x = (i * (barWidth + gap)) + gap;
-
-      // Create a natural-looking distribution based on real amplitude
-      // Center bars are taller, edges are shorter
-      final centerFactor = 1.0 - ((i - barCount / 2).abs() / (barCount / 2));
-      final variation = 0.3 + random.nextDouble() * 0.7;
-
-      // Jitter adds noise/irregularity
-      final jitterNoise = jitter * (random.nextDouble() - 0.5) * 0.5;
-
-      // Calculate bar height based on REAL amplitude
-      final barHeight =
-          (amplitude * centerFactor * variation + jitterNoise).clamp(
-            0.05,
-            1.0,
-          ) *
-          (height * 0.4);
-
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(x, midHeight),
-          width: barWidth,
-          height: barHeight,
-        ),
-        const Radius.circular(2),
-      );
-
-      canvas.drawRRect(rect, fillPaint);
-      canvas.drawRRect(rect, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant AudioWavePainter oldDelegate) {
-    // Only repaint when actual values change
-    return oldDelegate.amplitude != amplitude ||
-        oldDelegate.color != color ||
-        oldDelegate.jitter != jitter ||
-        oldDelegate.isActive != isActive;
   }
 }

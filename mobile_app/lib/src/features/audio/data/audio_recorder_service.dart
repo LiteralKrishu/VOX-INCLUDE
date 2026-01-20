@@ -74,7 +74,7 @@ class AudioRecorderService {
         }
         return null; // Should not happen if responseType is bytes
       } catch (e) {
-        print("Error processing web audio blob: $e");
+        debugPrint("Error processing web audio blob: $e");
         return null;
       }
     }

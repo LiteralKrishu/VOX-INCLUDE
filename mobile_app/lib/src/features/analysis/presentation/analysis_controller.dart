@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart';
+
 import '../../audio/data/audio_recorder_service.dart';
 import '../../audio/data/transcription_service.dart';
 import '../../analysis/data/analysis_repository.dart';
@@ -75,6 +76,9 @@ enum ApiStatus { idle, recording, sending, processing, done, error }
 // API Status provider
 final apiStatusProvider = StateProvider<ApiStatus>((ref) => ApiStatus.idle);
 
+// Real-time transcript provider
+final transcriptProvider = StateProvider<String>((ref) => "");
+
 final analysisControllerProvider =
     StateNotifierProvider<AnalysisController, AsyncValue<AnalysisResult?>>((
       ref,
@@ -85,6 +89,7 @@ final analysisControllerProvider =
       final amplitudeNotifier = ref.read(amplitudeProvider.notifier);
       final isRecordingNotifier = ref.read(isRecordingProvider.notifier);
       final apiStatusNotifier = ref.read(apiStatusProvider.notifier);
+      final transcriptNotifier = ref.read(transcriptProvider.notifier);
       return AnalysisController(
         recorder,
         transcriber,
@@ -92,6 +97,7 @@ final analysisControllerProvider =
         amplitudeNotifier,
         isRecordingNotifier,
         apiStatusNotifier,
+        transcriptNotifier,
       );
     });
 
@@ -103,6 +109,7 @@ class AnalysisController extends StateNotifier<AsyncValue<AnalysisResult?>> {
   final AmplitudeNotifier _amplitudeNotifier;
   final StateController<bool> _isRecordingNotifier;
   final StateController<ApiStatus> _apiStatusNotifier;
+  final StateController<String> _transcriptNotifier;
 
   bool _isAnalyzing = false;
   String _currentTranscript = "";
@@ -114,6 +121,7 @@ class AnalysisController extends StateNotifier<AsyncValue<AnalysisResult?>> {
     this._amplitudeNotifier,
     this._isRecordingNotifier,
     this._apiStatusNotifier,
+    this._transcriptNotifier,
   ) : super(const AsyncValue.data(null));
 
   Future<void> startAnalysis() async {
@@ -121,6 +129,7 @@ class AnalysisController extends StateNotifier<AsyncValue<AnalysisResult?>> {
     _isAnalyzing = true;
     _isRecordingNotifier.state = true;
     _apiStatusNotifier.state = ApiStatus.recording;
+    _transcriptNotifier.state = ""; // Reset transcript
 
     try {
       // Start initial recording
@@ -131,6 +140,7 @@ class AnalysisController extends StateNotifier<AsyncValue<AnalysisResult?>> {
       await _transcriber.startListening(
         onResult: (text) {
           _currentTranscript = text;
+          _transcriptNotifier.state = text; // Update provider
         },
       );
 
@@ -189,7 +199,7 @@ class AnalysisController extends StateNotifier<AsyncValue<AnalysisResult?>> {
       }
 
       if (audioBase64 == null) {
-        print("Warning: No audio data captured");
+        debugPrint("Warning: No audio data captured");
         return;
       }
 
@@ -213,7 +223,7 @@ class AnalysisController extends StateNotifier<AsyncValue<AnalysisResult?>> {
         state = AsyncValue.data(result);
       }
     } catch (e, st) {
-      print("Analysis Error: $e");
+      debugPrint("Analysis Error: $e");
       if (mounted) {
         _apiStatusNotifier.state = ApiStatus.error;
         // Show error to user for important failures

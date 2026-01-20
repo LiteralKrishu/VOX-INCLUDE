@@ -109,6 +109,7 @@ class DashboardScreen extends ConsumerWidget {
                         amplitude: realAmplitude,
                         jitter: ribbonJitter,
                         label: displayText,
+                        transcript: ref.watch(transcriptProvider),
                         isRecording: isRecording,
                       ),
                     ),
